@@ -56,7 +56,8 @@ echo "+++ usergrid configuration:  CASSANDRA_CLUSTER_NAME=${CASSANDRA_CLUSTER_NA
 
 echo "+++ configure usergrid"
 
-USERGRID_PROPERTIES_FILE=/usr/share/tomcat9/lib/usergrid-deployment.properties
+USERGRID_PROPERTIES_FILE=/opt/tomcat/latest/lib/usergrid-deployment.properties
+#USERGRID_PROPERTIES_FILE=/usr/share/tomcat9/lib/usergrid-deployment.properties
 
 sed -i "s/cassandra.url=localhost:9160/cassandra.url=${CASSANDRA_PORT_9160_TCP_ADDR}:${CASSANDRA_PORT_9160_TCP_PORT}/g" $USERGRID_PROPERTIES_FILE
 sed -i "s/cassandra.cluster=Test Cluster/cassandra.cluster=$CASSANDRA_CLUSTER_NAME/g" $USERGRID_PROPERTIES_FILE
@@ -73,10 +74,14 @@ sed -i "s/#elasticsearch.queue_impl=LOCAL/elasticsearch.queue_impl=LOCAL/g" $USE
 sed -i "s/#cassandra.version=1.2/cassandra.version=2.1/g" $USERGRID_PROPERTIES_FILE
 
 # update tomcat's java options
-sed -i "s#\"-Djava.awt.headless=true -Xmx128m -XX:+UseConcMarkSweepGC\"#\"-Djava.awt.headless=true -XX:+UseConcMarkSweepGC -Xmx${TOMCAT_RAM} -Xms${TOMCAT_RAM} -verbose:gc\"#g" /etc/default/tomcat9
+#sed -i "s#\"-Djava.awt.headless=true -Xmx128m -XX:+UseConcMarkSweepGC\"#\"-Djava.awt.headless=true -XX:+UseConcMarkSweepGC -Xmx${TOMCAT_RAM} -Xms${TOMCAT_RAM} -verbose:gc\"#g" /etc/default/tomcat9
 
 echo "+++ start usergrid"
-service tomcat9 start
+#service tomcat9 start
+#systemctl start tomcat9
+#/usr/share/tomcat9/logs
+#/usr/share/tomcat9/bin/startup.sh
+/opt/tomcat/latest/bin/startup.sh
 
 
 # database setup
@@ -85,104 +90,104 @@ service tomcat9 start
 while [ -z "$(curl -s localhost:8080/status | grep '"cassandraAvailable" : true')" ] ;
 do
   echo "+++ tomcat log:"
-#  tail -n 20 /var/log/tomcat9/catalina.out
-  journalctl --unit=tomcat9.service -n 20 --no-pager
+  tail -n 20 /opt/tomcat/latest/logs/catalina.out
+#  journalctl --unit=tomcat9.service -n 20 --no-pager
   echo "+++ waiting for cassandra being available to usergrid"
   sleep 2
 done
 
-echo "+++ usergrid database setup"
-curl --user ${ADMIN_USER}:${ADMIN_PASS} -X PUT http://localhost:8080/system/database/setup
-
-echo "+++ usergrid database bootstrap"
-curl --user ${ADMIN_USER}:${ADMIN_PASS} -X PUT http://localhost:8080/system/database/bootstrap
-
-echo "+++ usergrid superuser setup"
-curl --user ${ADMIN_USER}:${ADMIN_PASS} -X GET http://localhost:8080/system/superuser/setup
-
-echo "+++ create organization and corresponding organization admin account"
-curl -D - \
-     -X POST  \
-     -d "organization=${ORG_NAME}&username=${ORG_NAME}admin&name=${ORG_NAME}admin&email=${ORG_NAME}admin@example.com&password=${ORG_NAME}admin" \
-     http://localhost:8080/management/organizations
-
-echo "+++ create admin token with permissions"
-export ADMINTOKEN=$(curl -X POST --silent "http://localhost:8080/management/token" -d "{ \"username\":\"${ORG_NAME}admin\", \"password\":\"${ORG_NAME}admin\", \"grant_type\":\"password\"} " | cut -f 1 -d , | cut -f 2 -d : | cut -f 2 -d \")
-echo ADMINTOKEN=$ADMINTOKEN
-
-echo "+++ create app"
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -H "Content-Type: application/json" \
-     -X POST -d "{ \"name\":\"${APP_NAME}\" }" \
-     http://localhost:8080/management/orgs/${ORG_NAME}/apps
-
-
-echo "+++ delete guest permissions"
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X DELETE "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/guest"
-
-echo "+++ delete default permissions which are too permissive"
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X DELETE "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/default" 
-
-
-echo "+++ create new guest role"
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles" \
-     -d "{ \"name\":\"guest\", \"title\":\"Guest\" }"
-
-echo "+++ create new default role, applied to each logged in user"
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles" \
-     -d "{ \"name\":\"default\", \"title\":\"User\" }"
-
-
-echo "+++ create guest permissions required for login"
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/guest/permissions" \
-     -d "{ \"permission\":\"post:/token\" }"
-
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/guest/permissions" \
-     -d "{ \"permission\":\"post:/users\" }"
-
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/guest/permissions" \
-     -d "{ \"permission\":\"get:/auth/facebook\" }"
-
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/guest/permissions" \
-     -d "{ \"permission\":\"get:/auth/googleplus\" }"
-
-echo "+++ create default permissions for a logged in user"
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/default/permissions" \
-     -d "{ \"permission\":\"get,put,post,delete:/users/\${user}/**\" }"
-
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/default/permissions" \
-     -d "{ \"permission\":\"post:/notifications\" }"
-
-echo "+++ create user"
-curl -D - \
-     -H "Authorization: Bearer ${ADMINTOKEN}" \
-     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/users" \
-     -d "{ \"username\":\"${ORG_NAME}user\", \"password\":\"${ORG_NAME}user\", \"email\":\"${ORG_NAME}user@example.com\" }"
+#echo "+++ usergrid database setup"
+#curl --user ${ADMIN_USER}:${ADMIN_PASS} -X PUT http://localhost:8080/system/database/setup
+#
+#echo "+++ usergrid database bootstrap"
+#curl --user ${ADMIN_USER}:${ADMIN_PASS} -X PUT http://localhost:8080/system/database/bootstrap
+#
+#echo "+++ usergrid superuser setup"
+#curl --user ${ADMIN_USER}:${ADMIN_PASS} -X GET http://localhost:8080/system/superuser/setup
+#
+#echo "+++ create organization and corresponding organization admin account"
+#curl -D - \
+#     -X POST  \
+#     -d "organization=${ORG_NAME}&username=${ORG_NAME}admin&name=${ORG_NAME}admin&email=${ORG_NAME}admin@example.com&password=${ORG_NAME}admin" \
+#     http://localhost:8080/management/organizations
+#
+#echo "+++ create admin token with permissions"
+#export ADMINTOKEN=$(curl -X POST --silent "http://localhost:8080/management/token" -d "{ \"username\":\"${ORG_NAME}admin\", \"password\":\"${ORG_NAME}admin\", \"grant_type\":\"password\"} " | cut -f 1 -d , | cut -f 2 -d : | cut -f 2 -d \")
+#echo ADMINTOKEN=$ADMINTOKEN
+#
+#echo "+++ create app"
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -H "Content-Type: application/json" \
+#     -X POST -d "{ \"name\":\"${APP_NAME}\" }" \
+#     http://localhost:8080/management/orgs/${ORG_NAME}/apps
+#
+#
+#echo "+++ delete guest permissions"
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X DELETE "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/guest"
+#
+#echo "+++ delete default permissions which are too permissive"
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X DELETE "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/default"
+#
+#
+#echo "+++ create new guest role"
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles" \
+#     -d "{ \"name\":\"guest\", \"title\":\"Guest\" }"
+#
+#echo "+++ create new default role, applied to each logged in user"
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles" \
+#     -d "{ \"name\":\"default\", \"title\":\"User\" }"
+#
+#
+#echo "+++ create guest permissions required for login"
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/guest/permissions" \
+#     -d "{ \"permission\":\"post:/token\" }"
+#
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/guest/permissions" \
+#     -d "{ \"permission\":\"post:/users\" }"
+#
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/guest/permissions" \
+#     -d "{ \"permission\":\"get:/auth/facebook\" }"
+#
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/guest/permissions" \
+#     -d "{ \"permission\":\"get:/auth/googleplus\" }"
+#
+#echo "+++ create default permissions for a logged in user"
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/default/permissions" \
+#     -d "{ \"permission\":\"get,put,post,delete:/users/\${user}/**\" }"
+#
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/roles/default/permissions" \
+#     -d "{ \"permission\":\"post:/notifications\" }"
+#
+#echo "+++ create user"
+#curl -D - \
+#     -H "Authorization: Bearer ${ADMINTOKEN}" \
+#     -X POST "http://localhost:8080/${ORG_NAME}/${APP_NAME}/users" \
+#     -d "{ \"username\":\"${ORG_NAME}user\", \"password\":\"${ORG_NAME}user\", \"email\":\"${ORG_NAME}user@example.com\" }"
 
 echo
 echo "+++ done"
 
 # log usergrid output do stdout so it shows up in docker logs
-#tail -f /var/log/tomcat9/catalina.out /var/log/tomcat9/localhost_access_log.20*.txt
-journalctl --unit=tomcat9.service -n 100 -f
+tail -f /opt/tomcat/latest/logs/catalina.out /opt/tomcat/latest/logs/localhost_access_log.20*.txt
+#journalctl --unit=tomcat9.service -n 100 -f
