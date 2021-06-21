@@ -34,7 +34,7 @@ RUN \
   echo "+++ get usergrid source, set logging level" && \
   git clone --single-branch --branch master --depth 50 https://github.com/apache/usergrid.git usergrid && \
   cd usergrid && \
-  git checkout c6945e3d6f608d1333c269657eb47064866d3e0b && \
+  git checkout 1bf227b1b6b3913abaac6c0648d0714fd2cacc93 && \
   grep -rl log4j.rootLogger=INFO stack | xargs sed -i 's#log4j.rootLogger=INFO#log4j.rootLogger=WARN#g' && \
   \
   echo "+++ build usergrid" && \
