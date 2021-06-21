@@ -56,7 +56,7 @@ echo "+++ usergrid configuration:  CASSANDRA_CLUSTER_NAME=${CASSANDRA_CLUSTER_NA
 
 echo "+++ configure usergrid"
 
-USERGRID_PROPERTIES_FILE=/usr/share/tomcat7/lib/usergrid-deployment.properties
+USERGRID_PROPERTIES_FILE=/usr/share/tomcat9/lib/usergrid-deployment.properties
 
 sed -i "s/cassandra.url=localhost:9160/cassandra.url=${CASSANDRA_PORT_9160_TCP_ADDR}:${CASSANDRA_PORT_9160_TCP_PORT}/g" $USERGRID_PROPERTIES_FILE
 sed -i "s/cassandra.cluster=Test Cluster/cassandra.cluster=$CASSANDRA_CLUSTER_NAME/g" $USERGRID_PROPERTIES_FILE
@@ -73,10 +73,10 @@ sed -i "s/#elasticsearch.queue_impl=LOCAL/elasticsearch.queue_impl=LOCAL/g" $USE
 sed -i "s/#cassandra.version=1.2/cassandra.version=2.1/g" $USERGRID_PROPERTIES_FILE
 
 # update tomcat's java options
-sed -i "s#\"-Djava.awt.headless=true -Xmx128m -XX:+UseConcMarkSweepGC\"#\"-Djava.awt.headless=true -XX:+UseConcMarkSweepGC -Xmx${TOMCAT_RAM} -Xms${TOMCAT_RAM} -verbose:gc\"#g" /etc/default/tomcat7
+sed -i "s#\"-Djava.awt.headless=true -Xmx128m -XX:+UseConcMarkSweepGC\"#\"-Djava.awt.headless=true -XX:+UseConcMarkSweepGC -Xmx${TOMCAT_RAM} -Xms${TOMCAT_RAM} -verbose:gc\"#g" /etc/default/tomcat9
 
 echo "+++ start usergrid"
-service tomcat7 start
+service tomcat9 start
 
 
 # database setup
@@ -85,7 +85,8 @@ service tomcat7 start
 while [ -z "$(curl -s localhost:8080/status | grep '"cassandraAvailable" : true')" ] ;
 do
   echo "+++ tomcat log:"
-  tail -n 20 /var/log/tomcat7/catalina.out
+#  tail -n 20 /var/log/tomcat9/catalina.out
+  journalctl --unit=tomcat9.service -n 20 --no-pager
   echo "+++ waiting for cassandra being available to usergrid"
   sleep 2
 done
@@ -183,4 +184,5 @@ echo
 echo "+++ done"
 
 # log usergrid output do stdout so it shows up in docker logs
-tail -f /var/log/tomcat7/catalina.out /var/log/tomcat7/localhost_access_log.20*.txt
+#tail -f /var/log/tomcat9/catalina.out /var/log/tomcat9/localhost_access_log.20*.txt
+journalctl --unit=tomcat9.service -n 100 -f
