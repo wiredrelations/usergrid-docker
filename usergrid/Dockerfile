@@ -38,8 +38,9 @@ RUN \
 #  \
   echo "+++ Setup Tomcat9" && \
   useradd -m -U -d /opt/tomcat -s /bin/false tomcat && \
-  VERSION=9.0.48 && \
-  wget https://www-eu.apache.org/dist/tomcat/tomcat-9/v${VERSION}/bin/apache-tomcat-${VERSION}.tar.gz -P /tmp && \
+  VERSION=7.0.109 && \
+#  wget https://www-eu.apache.org/dist/tomcat/tomcat-9/v${VERSION}/bin/apache-tomcat-${VERSION}.tar.gz -P /tmp && \
+  wget https://www-eu.apache.org/dist/tomcat/tomcat-7/v${VERSION}/bin/apache-tomcat-${VERSION}.tar.gz -P /tmp && \
   tar -xf /tmp/apache-tomcat-${VERSION}.tar.gz -C /opt/tomcat/ && \
   ln -s /opt/tomcat/apache-tomcat-${VERSION} /opt/tomcat/latest && \
   sh -c 'chmod +x /opt/tomcat/latest/bin/*.sh' && \
